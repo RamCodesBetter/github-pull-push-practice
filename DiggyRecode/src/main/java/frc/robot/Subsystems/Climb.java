@@ -62,8 +62,8 @@ public class Climb extends SubsystemBase {
     private final TalonFX climbMotorFollower;
 
     public Climb() {
-        climbMotorLeader   = new TalonFX(Constants.HardwarePorts.climbL, "mechbussy");
-        climbMotorFollower = new TalonFX(Constants.HardwarePorts.climbR, "mechbussy");
+        climbMotorLeader   = new TalonFX(Constants.HardwarePorts.climbL, Constants.mechBus);
+        climbMotorFollower = new TalonFX(Constants.HardwarePorts.climbR, Constants.mechBus);
 
         config(climbMotorLeader,   NeutralModeValue.Brake, InvertedValue.CounterClockwise_Positive);
         config(climbMotorFollower, NeutralModeValue.Brake, InvertedValue.CounterClockwise_Positive);

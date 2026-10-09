@@ -1,7 +1,8 @@
 package frc.robot.Subsystems;
 
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
-import com.ctre.phoenix6.controls.VoltageOut;
+import com.ctre.phoenix6.controls.NeutralOut;
+import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
@@ -12,8 +13,9 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 
 /**
- * Intake subsystem — pulls balls from the floor into the robot.
- * Controlled via voltage output. Uses Brake mode to hold position when stopped.
+ * Intake subsystem — the roller that pulls balls from the floor into the robot.
+ * Speed is closed-loop rotations per second. The intake pivot is a separate
+ * subsystem ({@link Pivot}) and stays on voltage.
  *
  * <p>
  * SysId routines are preserved in comments below for future characterization if
@@ -22,11 +24,9 @@ import frc.robot.Constants;
 public class Intake extends SubsystemBase {
     private static Intake instance;
 
-    /**
-     * Pre-allocated VoltageOut control request — reused to avoid per-call GC
-     * allocation.
-     */
-    private final VoltageOut voltageRequest = new VoltageOut(0);
+    /** Reused so each setVelocity() does not allocate. Slot 0 holds the gains below. */
+    private final VelocityVoltage rpsRequest = new VelocityVoltage(0).withSlot(0);
+    private final NeutralOut neutralRequest = new NeutralOut();
 
     /**
      * Returns the singleton instance of Intake, creating it if necessary.
@@ -38,36 +38,38 @@ public class Intake extends SubsystemBase {
         return instance;
     }
 
-    /** Named voltage states for the intake motor. */
+    /**
+     * Named speeds in motor rotations per second. Positive = intake direction.
+     * Old voltages: ON 5 V, CYCLE 2 V, REVERSE -2 V. Divided by kV 0.12. Retune on the robot.
+     */
     public enum IntakeStates {
-        ON(5),
-        CYCLE(2),
+        ON(42),
+        CYCLE(17),
         OFF(0),
-        REVERSE(-2);
+        REVERSE(-17);
 
-        double voltage;
+        private final double rps;
 
-        private IntakeStates(double voltage) {
-            this.voltage = voltage;
+        private IntakeStates(double rps) {
+            this.rps = rps;
         }
 
-        /** Returns the voltage associated with this state (volts). */
-        public double getVoltage() {
-            return voltage;
+        /** Returns the target speed for this state, in rotations per second. */
+        public double getRps() {
+            return rps;
         }
     }
 
     private final TalonFX intakeMotor;
 
     public Intake() {
-        intakeMotor = new TalonFX(Constants.HardwarePorts.intake, "mechbussy");
+        intakeMotor = new TalonFX(Constants.HardwarePorts.intake, Constants.mechBus);
         configureMotor(intakeMotor, NeutralModeValue.Brake, InvertedValue.Clockwise_Positive);
     }
 
     /**
-     * Configures a TalonFX motor with neutral mode, inversion, stator current
-     * limit,
-     * a 50 Hz velocity signal update rate, and optimized CAN bus utilization.
+     * Configures a TalonFX motor with neutral mode, inversion, velocity gains,
+     * stator current limit, and optimized CAN bus utilization.
      *
      * @param motor       The TalonFX to configure
      * @param neutralMode Brake or Coast when no output is applied
@@ -79,13 +81,17 @@ public class Intake extends SubsystemBase {
         config.MotorOutput.Inverted = direction;
         config.MotorOutput.NeutralMode = neutralMode;
 
+        config.Slot0.kS = Constants.RollerGains.kS;
+        config.Slot0.kV = Constants.RollerGains.kV;
+        config.Slot0.kP = Constants.RollerGains.kP;
+
         // Stator limit prevents the intake motor from burning out during hard jams
         config.CurrentLimits.StatorCurrentLimit = Constants.CurrentLimits.intakeStator;
         config.CurrentLimits.StatorCurrentLimitEnable = true;
 
         motor.getConfigurator().apply(config);
 
-        // Optimize CAN bus: this motor only runs open-loop, so we don't need fast feedback
+        // Status frames to the Rio only. The velocity loop runs on the motor.
         motor.getPosition().setUpdateFrequency(4);
         motor.getVelocity().setUpdateFrequency(4);
 
@@ -94,13 +100,18 @@ public class Intake extends SubsystemBase {
     }
 
     /**
-     * Sets the intake motor output voltage.
-     * Uses a pre-allocated VoltageOut to avoid object allocation on every call.
+     * Sets the intake roller speed in rotations per second.
+     * Zero releases the motor to its neutral mode (Brake) instead of having
+     * the PID hold 0 rps.
      *
-     * @param voltage Voltage to apply (positive = intake direction)
+     * @param rps Target speed (positive = intake direction)
      */
-    public void setVoltage(double voltage) {
-        intakeMotor.setControl(voltageRequest.withOutput(voltage));
+    public void setVelocity(double rps) {
+        if (rps == 0) {
+            intakeMotor.setControl(neutralRequest);
+        } else {
+            intakeMotor.setControl(rpsRequest.withVelocity(rps));
+        }
     }
 
     /**
@@ -110,7 +121,7 @@ public class Intake extends SubsystemBase {
      * @return An InstantCommand-style command
      */
     public Command setState(IntakeStates state) {
-        return Commands.runOnce(() -> setVoltage(state.getVoltage()), this);
+        return Commands.runOnce(() -> setVelocity(state.getRps()), this);
     }
 
     @Override

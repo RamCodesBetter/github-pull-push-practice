@@ -1,10 +1,9 @@
 
 package frc.robot.Commands.Intake;
 
-import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.Subsystems.Intake;
-import frc.robot.Subsystems.Intake.IntakeStates;;
+import frc.robot.Subsystems.Intake.IntakeStates;
 
 public class SetIntake extends Command {
     private Intake s_Intake;
@@ -22,7 +21,7 @@ public class SetIntake extends Command {
 
     @Override
     public void initialize() {
-        s_Intake.setVoltage(state.getVoltage());
+        s_Intake.setVelocity(state.getRps());
     }
 
     @Override
@@ -34,7 +33,7 @@ public class SetIntake extends Command {
     }
 
     @Override
-    public boolean isFinished() { // Return the color sensor result is greater than the threshold or the timer has elapsed, if true end the command
+    public boolean isFinished() {
         return true;
     }
 }

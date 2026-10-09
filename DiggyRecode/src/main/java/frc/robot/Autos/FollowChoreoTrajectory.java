@@ -26,7 +26,7 @@ public class FollowChoreoTrajectory extends Command {
   private Optional<Trajectory<SwerveSample>> trajectoryOpt;
   private Trajectory<SwerveSample> trajectory = null;
 
-  private Optional<DriverStation.Alliance> alliance;
+  private boolean isRed;
   private CommandSwerveDrivetrain s_Swerve;
   private Quest quest;
   private Optional<Pose2d> startPose;
@@ -43,7 +43,6 @@ public class FollowChoreoTrajectory extends Command {
     this.quest = Quest.getInstance();
 
     s_Swerve = CommandSwerveDrivetrain.getInstance();
-    alliance = DriverStation.getAlliance();
     timer = new Timer();
 
     trajectoryOpt = traj;
@@ -58,16 +57,18 @@ public class FollowChoreoTrajectory extends Command {
     timer.reset();
     timer.start();
 
+    // Read here, not in the constructor. Autos are built at boot, often before the
+    // DS has sent an alliance, and getAlliance().get() on an empty Optional throws.
+    isRed = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Red;
+
     if (trajectoryOpt.isPresent()) {
       trajectory = trajectoryOpt.get();
-      System.out.println(" trajectory optinal present");
     }
 
-
     if (trajectory != null){
-      startPose = trajectory.getInitialPose(alliance.get() == DriverStation.Alliance.Red);
-      s_Swerve.resetOdo(startPose.get());
-      quest.anchorQuest(new Pose3d(startPose.get()));
+      startPose = trajectory.getInitialPose(isRed);
+      // resetOdo also re-anchors the Quest.
+      startPose.ifPresent(s_Swerve::resetOdo);
     }
     thetaController.enableContinuousInput(-Math.PI, Math.PI);
   }
@@ -76,8 +77,7 @@ public class FollowChoreoTrajectory extends Command {
   @Override
   public void execute() {
     if(trajectory != null){
-      Optional<SwerveSample> sample = trajectory.sampleAt(timer.get(), alliance.get() == DriverStation.Alliance.Red);
-      FollowChoreoSample(sample.get());
+      trajectory.sampleAt(timer.get(), isRed).ifPresent(this::FollowChoreoSample);
     }
   }
 
@@ -85,17 +85,12 @@ public class FollowChoreoTrajectory extends Command {
   @Override
   public void end(boolean interrupted) {
     timer.stop();
-    Pose2d pose = s_Swerve.getState().Pose;
     s_Swerve.setControl(new SwerveRequest.ApplyFieldSpeeds().withSpeeds(new ChassisSpeeds()));
-
-    if (trajectory != null){
-      Optional<Pose2d> goal = trajectory.getFinalPose(alliance.get() == DriverStation.Alliance.Red);
-  }}
+  }
 
   // Returns true when the command should end.
   @Override
   public boolean isFinished() {
-    System.out.println(trajectory);
     return trajectory != null ? timer.hasElapsed(trajectory.getTotalTime()+ 0.2) : true;
   }
 

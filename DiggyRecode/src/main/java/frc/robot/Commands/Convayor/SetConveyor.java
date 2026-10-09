@@ -1,7 +1,6 @@
 
 package frc.robot.Commands.Convayor;
 
-import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.Subsystems.Conveyor;
 import frc.robot.Subsystems.Conveyor.ConveyorStates;
@@ -19,7 +18,7 @@ public class SetConveyor extends Command {
 
     @Override
     public void initialize() {
-        s_Conveyor.setVoltage(state.getVoltage());
+        s_Conveyor.setVelocity(state.getRps());
     }
 
     @Override
@@ -31,7 +30,7 @@ public class SetConveyor extends Command {
     }
 
     @Override
-    public boolean isFinished() { // Return the color sensor result is greater than the threshold or the timer has elapsed, if true end the command
+    public boolean isFinished() {
         return true;
     }
 }

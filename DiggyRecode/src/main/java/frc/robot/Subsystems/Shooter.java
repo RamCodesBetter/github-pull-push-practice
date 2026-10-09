@@ -17,6 +17,7 @@ import com.ctre.phoenix6.signals.NeutralModeValue;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.units.Units;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
@@ -33,7 +34,7 @@ import frc.robot.Constants.HardwarePorts;
  * <p>Nonzero setpoints slew at {@link Constants#shooterRampRpsPerSec} so the flywheel
  * is not asked to step straight to the odometry request. setVelocity(0) still cuts
  * to voltage 0 so the motors coast down instead of the PID fighting to hold 0 rps.
- * The indexer is not slewed. The pivot stays on voltage.
+ * Intake, conveyor and indexer are also rps but not slewed. The intake pivot stays on voltage.
  */
 public class Shooter extends SubsystemBase {
     private static Shooter instance;
@@ -79,10 +80,10 @@ public class Shooter extends SubsystemBase {
     private double lastRampTimestamp;
 
     public Shooter() {
-        topL_leader = new TalonFX(HardwarePorts.shooterTL, "mechbussy");
-        botL        = new TalonFX(HardwarePorts.shooterBL, "mechbussy");
-        topR        = new TalonFX(HardwarePorts.shooterTR, "mechbussy");
-        // botR     = new TalonFX(HardwarePorts.shooterBR, "mechbussy");
+        topL_leader = new TalonFX(HardwarePorts.shooterTL, Constants.mechBus);
+        botL        = new TalonFX(HardwarePorts.shooterBL, Constants.mechBus);
+        topR        = new TalonFX(HardwarePorts.shooterTR, Constants.mechBus);
+        // botR     = new TalonFX(HardwarePorts.shooterBR, Constants.mechBus);
 
         config(topL_leader, NeutralModeValue.Coast, InvertedValue.CounterClockwise_Positive);
         config(botL,        NeutralModeValue.Coast, InvertedValue.CounterClockwise_Positive);
@@ -107,9 +108,8 @@ public class Shooter extends SubsystemBase {
      * Configures a TalonFX motor with neutral mode, inversion, PID/FF gains,
      * current limits, and optimized CAN bus utilization.
      *
-     * <p>The velocity signal update frequency is left at default (100 Hz) since the
-     * shooter PID needs fast feedback. optimizeBusUtilization() suppresses all
-     * other unused signals.
+     * <p>The velocity PID runs on the TalonFX itself. The Rio-side velocity signal
+     * is kept at 50 Hz for the ramp and feed checks; everything else is suppressed.
      *
      * @param motor       The TalonFX to configure
      * @param neutralMode Brake or Coast when no output is applied
@@ -136,10 +136,12 @@ public class Shooter extends SubsystemBase {
 
         motor.getConfigurator().apply(config);
 
-        // Suppress unused status signals to reduce CAN bus load.
-        // Leader needs fast velocity for PID, but position is unused.
+        // optimizeBusUtilization() turns off every signal that was not given a rate first.
+        // Velocity is read on the Rio for the ramp start and the ready-to-feed check, so it
+        // must be set here. Followers drop theirs to 4 Hz afterward in the constructor.
         motor.getPosition().setUpdateFrequency(4);
-        
+        motor.getVelocity().setUpdateFrequency(50);
+
         motor.optimizeBusUtilization();
     }
 
@@ -229,12 +231,19 @@ public class Shooter extends SubsystemBase {
         }
 
         double now = Timer.getFPGATimestamp();
-        // Cap dt so a disable/enable gap cannot dump several seconds of ramp in one loop.
-        double dt = MathUtil.clamp(now - lastRampTimestamp, 0, 0.05);
-        lastRampTimestamp = now;
 
-        double maxDelta = Constants.shooterRampRpsPerSec * dt;
-        commandedRps += MathUtil.clamp(rampTargetRps - commandedRps, -maxDelta, maxDelta);
+        if (DriverStation.isDisabled()) {
+            // Motors get no output while disabled, so hold the setpoint at the coasting
+            // wheel speed. Still sent below: the TalonFX resumes its last request the
+            // instant it is enabled, and that must not be the pre-disable full speed.
+            commandedRps = Math.max(0, getLeaderVelocity());
+        } else {
+            // Cap dt so a long loop overrun cannot dump a big chunk of ramp at once.
+            double dt = MathUtil.clamp(now - lastRampTimestamp, 0, 0.05);
+            double maxDelta = Constants.shooterRampRpsPerSec * dt;
+            commandedRps += MathUtil.clamp(rampTargetRps - commandedRps, -maxDelta, maxDelta);
+        }
+        lastRampTimestamp = now;
 
         if (commandedRps <= 0) {
             topL_leader.setControl(voltageRequest.withOutput(0));

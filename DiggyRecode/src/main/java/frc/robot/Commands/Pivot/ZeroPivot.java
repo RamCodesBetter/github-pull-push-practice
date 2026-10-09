@@ -1,11 +1,8 @@
 
 package frc.robot.Commands.Pivot;
 
-import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
-import frc.robot.Subsystems.Intake;
 import frc.robot.Subsystems.Pivot;
-import frc.robot.Subsystems.Intake.IntakeStates;;
 
 public class ZeroPivot extends Command {
     private Pivot s_Pivot;
@@ -33,6 +30,6 @@ public class ZeroPivot extends Command {
 
     @Override
     public boolean isFinished() {
-        return s_Pivot.getCurrent().getValueAsDouble() > 100;
+        return s_Pivot.getCurrent().refresh().getValueAsDouble() > 100;
     }
 }

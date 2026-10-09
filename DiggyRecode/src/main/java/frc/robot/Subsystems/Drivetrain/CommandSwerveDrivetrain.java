@@ -227,72 +227,57 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         return run(() -> this.setControl(request.get()));
     }
 
+    /**
+     * Sets the odometry pose and re-anchors the Quest to the same pose.
+     * Both have to move together: Quest vision measurements also correct heading,
+     * so resetting only the swerve pose gets pulled back to the old one.
+     */
     public void resetOdo(Pose2d pose) {
         s_Swerve.resetPose(pose);
         Quest.getInstance().anchorQuest(new Pose3d(pose));
     }
 
+    /**
+     * The field heading that means "pointing away from my driver station."
+     * Drive input is field-relative in the blue frame and flipped on red, so this is
+     * the heading the robot must think it has when the driver sees it facing forward.
+     */
+    public static Rotation2d allianceForward() {
+        return DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red
+                ? kRedAlliancePerspectiveRotation
+                : kBlueAlliancePerspectiveRotation;
+    }
+
+    /**
+     * Fixes field-relative driving. Point the robot straight away from your driver
+     * station and call this. Position is kept, so distance-based shooting still works.
+     *
+     * <p>The old reset always used 0°. That is correct on blue, but on red it told the
+     * robot it faced the red wall while it actually faced away, so every stick direction
+     * came out reversed.
+     */
+    public void resetHeading() {
+        resetOdo(new Pose2d(getState().Pose.getTranslation(), allianceForward()));
+    }
+
+    /**
+     * Re-seeds position after the robot is placed on one of the known reset spots.
+     * Heading is kept as-is; use {@link #resetHeading()} if driving is also off.
+     */
     public void resetOdoDynamic(resetPose location) {
-        Pose2d pose = this.getState().Pose;
-        if (DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue) {
-
-                if (location.equals(resetPose.TRENCH_LEFT)) {
-                pose = new Pose2d(
-                    Constants.ResetPoses.blue_TrenchLeft.getX(),
-                    Constants.ResetPoses.blue_TrenchLeft.getY(),
-                    pose.getRotation());
-                }
-
-                if (location.equals(resetPose.TRENCH_RIGHT)) {
-                pose = new Pose2d(
-                    Constants.ResetPoses.blue_TrenchRight.getX(),
-                    Constants.ResetPoses.blue_TrenchRight.getY(),
-                    pose.getRotation());
-                }
-
-                if (location.equals(resetPose.MIDDLE)) {
-                pose = new Pose2d(
-                    Constants.ResetPoses.blue_TrenchMid.getX(),
-                    Constants.ResetPoses.blue_TrenchMid.getY(),
-                    pose.getRotation());
-                }
-
-            s_Swerve.resetOdo(pose);
-        } else{
-                if (location.equals(resetPose.TRENCH_LEFT)) {
-                pose = new Pose2d(
-                    Constants.ResetPoses.red_TrenchLeft.getX(),
-                    Constants.ResetPoses.red_TrenchLeft.getY(),
-                    pose.getRotation());
-                }
-
-                if (location.equals(resetPose.TRENCH_RIGHT)) {
-                pose = new Pose2d(
-                    Constants.ResetPoses.red_TrenchRight.getX(),
-                    Constants.ResetPoses.red_TrenchRight.getY(),
-                    pose.getRotation());
-                }
-
-                if (location.equals(resetPose.MIDDLE)) {
-                pose = new Pose2d(
-                    Constants.ResetPoses.red_TrenchMid.getX(),
-                    Constants.ResetPoses.red_TrenchMid.getY(),
-                    pose.getRotation());
-                }
-
-            s_Swerve.resetOdo(pose);
-        }
+        boolean red = DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red;
+        Pose2d spot = switch (location) {
+            case TRENCH_LEFT -> red ? ResetPoses.red_TrenchLeft : ResetPoses.blue_TrenchLeft;
+            case TRENCH_RIGHT -> red ? ResetPoses.red_TrenchRight : ResetPoses.blue_TrenchRight;
+            case MIDDLE -> red ? ResetPoses.red_TrenchMid : ResetPoses.blue_TrenchMid;
+        };
+        resetOdo(new Pose2d(spot.getTranslation(), getState().Pose.getRotation()));
     }
 
     public enum resetPose {
         TRENCH_LEFT,
         TRENCH_RIGHT,
         MIDDLE
-    }
-
-    public void resetOdo() {
-        s_Swerve.resetPose(new Pose2d());
-        Quest.getInstance().anchorQuest(new Pose3d());
     }
 
     /**

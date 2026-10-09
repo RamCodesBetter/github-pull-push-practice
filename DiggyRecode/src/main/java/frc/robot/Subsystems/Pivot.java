@@ -15,9 +15,9 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 
 /**
- * Pivot subsystem — controls the shooter angle relative to the robot.
- * Currently uses open-loop voltage control. MotionMagic position control
- * is stubbed out in comments for future use.
+ * Pivot subsystem — deploys and stows the intake.
+ * Deliberately left on open-loop voltage; every other mechanism is rps.
+ * MotionMagic position control is stubbed out in comments for future use.
  *
  * <p>Uses Arm_Cosine gravity compensation type so kG properly counteracts
  * gravity at all pivot angles.
@@ -64,7 +64,7 @@ public class Pivot extends SubsystemBase {
     // ^ MotionMagic position control — reserved for when encoder-based control is tuned
 
     public Pivot() {
-        pivotMotor = new TalonFX(Constants.HardwarePorts.pivot, "mechbussy");
+        pivotMotor = new TalonFX(Constants.HardwarePorts.pivot, Constants.mechBus);
         configureMotor(pivotMotor, NeutralModeValue.Brake, InvertedValue.Clockwise_Positive);
     }
 
@@ -102,9 +102,12 @@ public class Pivot extends SubsystemBase {
         // Zero the encoder position at startup (assume mechanism starts at stow)
         motor.setPosition(0);
 
-        // Optimize CAN bus: open-loop control doesn't need fast position/velocity updates
+        // Optimize CAN bus: open-loop control doesn't need fast position/velocity updates.
+        // Stator current is read by ZeroPivot to detect the hard stop, so it has to be
+        // given a rate or optimizeBusUtilization() turns it off.
         motor.getPosition().setUpdateFrequency(4);
         motor.getVelocity().setUpdateFrequency(4);
+        motor.getStatorCurrent().setUpdateFrequency(50);
 
         // Suppress unused status frames to reduce CAN bus utilization
         motor.optimizeBusUtilization();

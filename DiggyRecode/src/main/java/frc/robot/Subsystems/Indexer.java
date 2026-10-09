@@ -1,6 +1,7 @@
 package frc.robot.Subsystems;
 
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
+import com.ctre.phoenix6.controls.NeutralOut;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
@@ -14,7 +15,6 @@ import frc.robot.Constants;
 /**
  * Indexer subsystem — feeds balls from the conveyor into the shooter.
  * Speed is closed-loop rotations per second on the TalonFX.
- * The pivot stays on open-loop voltage.
  */
 public class Indexer extends SubsystemBase {
     private static Indexer instance;
@@ -32,8 +32,7 @@ public class Indexer extends SubsystemBase {
 
     /**
      * Named speeds in motor rotations per second. Positive = toward the shooter.
-     * ON and REVERSE are the old 6 V and -3 V commands divided by kV 0.12
-     * (12 V / ~100 rps TalonFX free speed). Retune on the robot.
+     * Old voltages: ON 6 V, REVERSE -3 V. Divided by kV 0.12. Retune on the robot.
      */
     public enum IndexerStates {
         ON(50),
@@ -56,16 +55,16 @@ public class Indexer extends SubsystemBase {
 
     /** Reused so each setVelocity() does not allocate. Slot 0 holds the gains below. */
     private final VelocityVoltage rpsRequest = new VelocityVoltage(0).withSlot(0);
+    private final NeutralOut neutralRequest = new NeutralOut();
 
     public Indexer() {
-        indexerMotor = new TalonFX(Constants.HardwarePorts.indexer, "mechbussy");
+        indexerMotor = new TalonFX(Constants.HardwarePorts.indexer, Constants.mechBus);
         config(indexerMotor, NeutralModeValue.Brake, InvertedValue.CounterClockwise_Positive);
     }
 
     /**
-     * Configures a TalonFX motor with neutral mode, direction, current limits,
-     * a reduced velocity signal frequency (50 Hz = 20 ms), and optimized CAN bus
-     * utilization (suppresses status frames that aren't being read).
+     * Configures a TalonFX motor with neutral mode, direction, velocity gains,
+     * current limits, and optimized CAN bus utilization.
      *
      * @param motor       The TalonFX motor to configure
      * @param neutralMode Brake or Coast when no output is applied
@@ -77,18 +76,14 @@ public class Indexer extends SubsystemBase {
         config.MotorOutput.NeutralMode = neutralMode;
         config.MotorOutput.Inverted = direction;
 
-        // Not characterized. kV matches an unloaded TalonFX (~100 rps at 12 V).
-        // kP is in the same range as the shooter's characterized velocity kP.
-        config.Slot0.kS = 0.2;
-        config.Slot0.kV = 0.12;
-        config.Slot0.kP = 0.05;
-        config.Slot0.kD = 0;
+        config.Slot0.kS = Constants.RollerGains.kS;
+        config.Slot0.kV = Constants.RollerGains.kV;
+        config.Slot0.kP = Constants.RollerGains.kP;
 
         // Stator current limit protects the motor from overheating under load
         config.CurrentLimits.StatorCurrentLimit = Constants.CurrentLimits.indexerStator;
         config.CurrentLimits.StatorCurrentLimitEnable = true;
 
-        // Apply config once (previously applied twice — bug fixed)
         motor.getConfigurator().apply(config);
 
         // Status frames to the Rio only. The velocity loop runs on the motor.
@@ -101,12 +96,17 @@ public class Indexer extends SubsystemBase {
 
     /**
      * Sets the indexer speed in rotations per second.
-     * Zero commands 0 rps. The motor is in Brake.
+     * Zero releases the motor to its neutral mode (Brake) instead of having
+     * the PID hold 0 rps.
      *
      * @param rps Target speed (positive = toward shooter)
      */
     public void setVelocity(double rps) {
-        indexerMotor.setControl(rpsRequest.withVelocity(rps));
+        if (rps == 0) {
+            indexerMotor.setControl(neutralRequest);
+        } else {
+            indexerMotor.setControl(rpsRequest.withVelocity(rps));
+        }
     }
 
     /**

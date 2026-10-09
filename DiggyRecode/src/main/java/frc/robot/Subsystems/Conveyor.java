@@ -1,7 +1,8 @@
 package frc.robot.Subsystems;
 
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
-import com.ctre.phoenix6.controls.VoltageOut;
+import com.ctre.phoenix6.controls.NeutralOut;
+import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
@@ -13,7 +14,7 @@ import frc.robot.Constants;
 
 /**
  * Conveyor subsystem — moves balls from the intake zone into the indexer.
- * Controlled via voltage. Runs in Coast mode so balls don't jam on stop.
+ * Speed is closed-loop rotations per second. Runs in Coast mode so balls don't jam on stop.
  */
 public class Conveyor extends SubsystemBase {
     private static Conveyor instance;
@@ -28,41 +29,42 @@ public class Conveyor extends SubsystemBase {
         return instance;
     }
 
+    /** Reused so each setVelocity() does not allocate. Slot 0 holds the gains below. */
+    private final VelocityVoltage rpsRequest = new VelocityVoltage(0).withSlot(0);
+    private final NeutralOut neutralRequest = new NeutralOut();
+
     /**
-     * Pre-allocated VoltageOut control request — reused to avoid per-call GC
-     * allocation.
+     * Named speeds in motor rotations per second. Positive = toward the indexer.
+     * Old voltages: ON 4.5 V, CYCLE 3 V, REVERSE -3 V. Divided by kV 0.12. Retune on the robot.
      */
-    private final VoltageOut voltageRequest = new VoltageOut(0);
-
-    /** Named voltage states for the conveyor. */
     public enum ConveyorStates {
-        ON(4.5),
-        CYCLE(3),
+        ON(37.5),
+        CYCLE(25),
         OFF(0),
-        REVERSE(-3);
+        REVERSE(-25);
 
-        double voltage;
+        private final double rps;
 
-        private ConveyorStates(double voltage) {
-            this.voltage = voltage;
+        private ConveyorStates(double rps) {
+            this.rps = rps;
         }
 
-        /** Returns the voltage associated with this state (volts). */
-        public double getVoltage() {
-            return voltage;
+        /** Returns the target speed for this state, in rotations per second. */
+        public double getRps() {
+            return rps;
         }
     }
 
     private final TalonFX conveyorMotor;
 
     public Conveyor() {
-        conveyorMotor = new TalonFX(Constants.HardwarePorts.conveyor, "mechbussy");
+        conveyorMotor = new TalonFX(Constants.HardwarePorts.conveyor, Constants.mechBus);
         config(conveyorMotor, NeutralModeValue.Coast, InvertedValue.Clockwise_Positive);
     }
 
     /**
-     * Configures a TalonFX motor with neutral mode, inversion, current limits,
-     * a 50 Hz velocity signal update rate, and optimized CAN bus utilization.
+     * Configures a TalonFX motor with neutral mode, inversion, velocity gains,
+     * current limits, and optimized CAN bus utilization.
      *
      * @param motor       The TalonFX to configure
      * @param neutralMode Brake or Coast when no output is applied
@@ -74,6 +76,10 @@ public class Conveyor extends SubsystemBase {
         config.MotorOutput.NeutralMode = neutralMode;
         config.MotorOutput.Inverted = direction;
 
+        config.Slot0.kS = Constants.RollerGains.kS;
+        config.Slot0.kV = Constants.RollerGains.kV;
+        config.Slot0.kP = Constants.RollerGains.kP;
+
         // Supply + stator current limits to protect motor and PDP
         config.CurrentLimits.SupplyCurrentLimit = Constants.CurrentLimits.conveyorSupply;
         config.CurrentLimits.SupplyCurrentLimitEnable = true;
@@ -82,7 +88,7 @@ public class Conveyor extends SubsystemBase {
 
         motor.getConfigurator().apply(config);
 
-        // Optimize CAN bus: this motor only runs open-loop, so we don't need fast feedback
+        // Status frames to the Rio only. The velocity loop runs on the motor.
         motor.getPosition().setUpdateFrequency(4);
         motor.getVelocity().setUpdateFrequency(4);
 
@@ -91,12 +97,17 @@ public class Conveyor extends SubsystemBase {
     }
 
     /**
-     * Sets the conveyor motor output voltage directly.
+     * Sets the conveyor speed in rotations per second.
+     * Zero releases the motor so it actually coasts; a PID holding 0 rps would brake it.
      *
-     * @param voltage Voltage to apply (positive = toward indexer)
+     * @param rps Target speed (positive = toward indexer)
      */
-    public void setVoltage(double voltage) {
-        conveyorMotor.setControl(voltageRequest.withOutput(voltage));
+    public void setVelocity(double rps) {
+        if (rps == 0) {
+            conveyorMotor.setControl(neutralRequest);
+        } else {
+            conveyorMotor.setControl(rpsRequest.withVelocity(rps));
+        }
     }
 
     /**
@@ -106,7 +117,7 @@ public class Conveyor extends SubsystemBase {
      * @return An InstantCommand-style command
      */
     public Command setState(ConveyorStates state) {
-        return Commands.runOnce(() -> setVoltage(state.getVoltage()), this);
+        return Commands.runOnce(() -> setVelocity(state.getRps()), this);
     }
 
     @Override

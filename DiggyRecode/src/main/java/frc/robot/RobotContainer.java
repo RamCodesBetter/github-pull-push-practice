@@ -93,7 +93,9 @@ public class RobotContainer {
         // Fixed 15 rps test. Shooter only — feeding is POV up.
         driver.povDown().onTrue(new SetShooter(15));
 
-        driver.start().onTrue(new InstantCommand(() -> drivetrain.resetOdo()));
+        // Field-relative fix: point the robot away from your driver station, press Start.
+        // Alliance-aware, keeps XY. Works while disabled so it can be done before the match.
+        driver.start().onTrue(Commands.runOnce(drivetrain::resetHeading).ignoringDisable(true));
 
         driver.a().onTrue(CommandFactory.AllOff());
         driver.y().onTrue(new ForcePivot());
@@ -105,9 +107,16 @@ public class RobotContainer {
         // POV up: indexer + conveyor. Does not change shooter speed.
         driver.povUp().onTrue(CommandFactory.Feed());
 
-        driver.povLeft().onTrue(new InstantCommand(() -> drivetrain.resetOdoDynamic(resetPose.TRENCH_LEFT)));
+        driver.povLeft().onTrue(repositionAt(resetPose.TRENCH_LEFT));
         //State flipper 
         driver.povRight().onTrue(CommandFactory.ReverseFeed());
+
+        // Operator: place the robot on a known spot and press to re-seed position.
+        // Left/right are from your own driver station. Heading is kept; Start fixes heading.
+        opp.povLeft().onTrue(repositionAt(resetPose.TRENCH_LEFT));
+        opp.povRight().onTrue(repositionAt(resetPose.TRENCH_RIGHT));
+        opp.povUp().onTrue(repositionAt(resetPose.MIDDLE));
+        opp.start().onTrue(Commands.runOnce(drivetrain::resetHeading).ignoringDisable(true));
 
         // driver.povLeft().onTrue(new InstantCommand(() ->
         // drivetrain.resetOdoDynamic(resetPose.TRENCH_LEFT)));
@@ -157,6 +166,11 @@ public class RobotContainer {
         // driver.b().whileTrue(shooter.sysIdDynamic(Direction.kReverse));
         // driver.y().whileTrue(shooter.sysIdQuasistatic(Direction.kForward));
         // driver.a().whileTrue(shooter.sysIdQuasistatic(Direction.kReverse));
+    }
+
+    /** Re-seeds odometry at a known spot. Runs while disabled for pre-match setup. */
+    private Command repositionAt(resetPose location) {
+        return Commands.runOnce(() -> drivetrain.resetOdoDynamic(location)).ignoringDisable(true);
     }
 
     /**

@@ -1,11 +1,21 @@
 package frc.robot;
 
+import com.ctre.phoenix6.CANBus;
+
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 
 public class Constants {
 
+    /** CANivore bus all mechanism motors are on. */
+    public static final CANBus mechBus = new CANBus("mechbussy");
+
+    /**
+     * Known spots the driver can put the robot on and press a button to re-seed odometry.
+     * Red is blue rotated 180° about field center (8.265, 4.03), the same mirror the
+     * left/right trench pairs already follow. Rotation here is unused; heading is kept.
+     */
     public static final class ResetPoses {
         public static final Pose2d blue_TrenchLeft = new Pose2d(4.4, 7.17, new Rotation2d());
         public static final Pose2d blue_TrenchRight = new Pose2d(4.4, 0.89, new Rotation2d());
@@ -13,7 +23,7 @@ public class Constants {
 
         public static final Pose2d red_TrenchLeft = new Pose2d(12.13, 0.89, new Rotation2d());
         public static final Pose2d red_TrenchRight = new Pose2d(12.13, 7.17, new Rotation2d());
-        public static final Pose2d red_TrenchMid = new Pose2d(3.6, 4.04, new Rotation2d());
+        public static final Pose2d red_TrenchMid = new Pose2d(12.93, 4.02, new Rotation2d());
     }
 
     public static final class HardwarePorts {
@@ -73,6 +83,18 @@ public class Constants {
     public static final double shooterFeedToleranceRps = 5.0;
     /** Auto will feed anyway after this long so a missed target cannot stall the path. */
     public static final double shooterFeedTimeoutSec = 8.0;
+
+    /**
+     * Starting velocity gains for the rollers that were converted from voltage
+     * (intake, conveyor, indexer). Not characterized. kV is an unloaded TalonFX
+     * (12 V / ~100 rps), so each old voltage state divided by 0.12 gives about the
+     * same free speed it had before. kP is near the shooter's measured value.
+     */
+    public static final class RollerGains {
+        public static final double kS = 0.2;
+        public static final double kV = 0.12;
+        public static final double kP = 0.05;
+    }
     
     public static final class FieldConstants {
         public static Translation3d blueGoal = new Translation3d(4.6256,4.0345, 1.8288); // meters

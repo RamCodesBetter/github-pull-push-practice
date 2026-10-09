@@ -21,6 +21,7 @@ import frc.robot.Subsystems.Intake;
 import frc.robot.Subsystems.Pivot;
 import frc.robot.Subsystems.Shooter;
 
+// terminus :D
 public class Robot extends TimedRobot {
     private Command m_autonomousCommand;
 

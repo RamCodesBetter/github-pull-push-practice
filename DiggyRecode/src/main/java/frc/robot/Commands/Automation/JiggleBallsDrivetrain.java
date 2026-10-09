@@ -27,10 +27,7 @@ public class JiggleBallsDrivetrain extends Command {
     }
 
     @Override
-    public void initialize() {
-        timer.reset();
-        timer.start();
-    }
+    public void initialize() { timer.reset(); timer.start(); }
 
     @Override
     public void execute() {

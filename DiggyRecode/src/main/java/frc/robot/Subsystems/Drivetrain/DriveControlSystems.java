@@ -71,13 +71,20 @@ public class DriveControlSystems {
     // Avoids creating new objects each robot loop (20ms) which causes GC pauses
     // and can introduce CAN timing jitter.
 
+    // Both requests use the blue-alliance field frame and drive() flips translation on red.
+    // Auto-aim's heading math is in that same frame, so it must not be left on the default
+    // OperatorPerspective, or the two modes would disagree the moment a perspective is set.
+
     /** Reusable request for auto-aim mode (heading locked to goal). */
     private final SwerveRequest.FieldCentricFacingAngle autoAimRequest =
-            new SwerveRequest.FieldCentricFacingAngle();
-
-    /** Reusable request for normal teleop drive (heading controlled by right stick). */
-    private final SwerveRequest.FieldCentricFacingAngle driveRequest =
             new SwerveRequest.FieldCentricFacingAngle()
+                .withForwardPerspective(ForwardPerspectiveValue.BlueAlliance)
+                .withDesaturateWheelSpeeds(true)
+                .withSteerRequestType(SteerRequestType.MotionMagicExpo);
+
+    /** Reusable request for normal teleop drive (right stick is rotation rate). */
+    private final SwerveRequest.FieldCentric driveRequest =
+            new SwerveRequest.FieldCentric()
                 .withForwardPerspective(ForwardPerspectiveValue.BlueAlliance)
                 .withDesaturateWheelSpeeds(true)
                 .withSteerRequestType(SteerRequestType.MotionMagicExpo);
@@ -127,7 +134,7 @@ public class DriveControlSystems {
         return driveRequest
                 .withVelocityX(driverLY)
                 .withVelocityY(driverLX)
-                .withTargetRateFeedforward(driverRX);
+                .withRotationalRate(driverRX);
 
         // Alternative robot-centric mode (commented out):
         // return new SwerveRequest.RobotCentric()
@@ -200,10 +207,16 @@ public class DriveControlSystems {
      * (blue or red depending on DS alliance setting) while the driver translates normally.
      */
     public void turnOnAutoAim() {
-        mode_AlignToGoal = true;
         targetGoal = DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue
                 ? Constants.FieldConstants.blueGoal.toTranslation2d()
                 : Constants.FieldConstants.redGoal.toTranslation2d();
+
+        // Start the profile from where the robot is now. Otherwise it resumes from the
+        // last setpoint (or 0 rad on first use) and whips toward that before the goal.
+        var state = s_Swerve.getState();
+        thetaController.reset(state.Pose.getRotation().getRadians(), state.Speeds.omegaRadiansPerSecond);
+
+        mode_AlignToGoal = true;
     }
 
     /**
