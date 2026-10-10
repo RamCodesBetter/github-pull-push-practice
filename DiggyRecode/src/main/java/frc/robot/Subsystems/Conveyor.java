@@ -1,10 +1,12 @@
 package frc.robot.Subsystems;
 
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
+import com.ctre.phoenix6.controls.Follower;
 import com.ctre.phoenix6.controls.NeutralOut;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
+import com.ctre.phoenix6.signals.MotorAlignmentValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 
 import edu.wpi.first.wpilibj2.command.Command;
@@ -15,6 +17,7 @@ import frc.robot.Constants;
 /**
  * Conveyor subsystem — moves balls from the intake zone into the indexer.
  * Speed is closed-loop rotations per second. Runs in Coast mode so balls don't jam on stop.
+ * Two motors: the leader runs the velocity loop and the second motor follows it.
  */
 public class Conveyor extends SubsystemBase {
     private static Conveyor instance;
@@ -55,11 +58,21 @@ public class Conveyor extends SubsystemBase {
         }
     }
 
+    /** Leader. All speed commands go here. */
     private final TalonFX conveyorMotor;
+    /** Follows the leader in the same direction. */
+    private final TalonFX conveyorFollower;
 
     public Conveyor() {
         conveyorMotor = new TalonFX(Constants.HardwarePorts.conveyor, Constants.mechBus);
+        conveyorFollower = new TalonFX(Constants.HardwarePorts.conveyorFollower, Constants.mechBus);
+
         config(conveyorMotor, NeutralModeValue.Coast, InvertedValue.Clockwise_Positive);
+        config(conveyorFollower, NeutralModeValue.Coast, InvertedValue.Clockwise_Positive);
+
+        // Aligned = spins the same way the leader does. NeutralOut on the leader is
+        // passed through, so the follower also coasts when the conveyor is OFF.
+        conveyorFollower.setControl(new Follower(conveyorMotor.getDeviceID(), MotorAlignmentValue.Aligned));
     }
 
     /**

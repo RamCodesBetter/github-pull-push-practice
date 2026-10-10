@@ -31,8 +31,10 @@ public class Constants {
         public static final int pivot = 21;
 
         public static final int conveyor = 30;
+        // On mechBus. ID 14 is also the back-left drive motor but that's on the RIO bus. 
+        public static final int conveyorFollower = 14;
 
-        public static final int indexer= 40;
+        public static final int indexer = 40;
 
         public static final int shooterTL = 50;
         public static final int shooterBL = 51;
