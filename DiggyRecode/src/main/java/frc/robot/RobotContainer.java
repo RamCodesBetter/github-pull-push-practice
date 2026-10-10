@@ -6,6 +6,7 @@ package frc.robot;
 
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
@@ -53,6 +54,7 @@ public class RobotContainer {
     private Conveyor  conveyor =                                Conveyor.getInstance();
     private Shooter   shooter =                                  Shooter.getInstance();
     private Pivot     pivot =                                      Pivot.getInstance();
+    private Quest     quest =                         Quest.getInstance();
     // private Climb climb = Climb.getInstance();
 
     // --- Drive control and controllers ---
@@ -84,7 +86,7 @@ public class RobotContainer {
         // final bindings -----------------------------------------------
 
         //opp.povUP().onTrue(new InstantCommand(()->));
-        driver.leftBumper().onTrue(new ForcePivot(5));// FIX COMMAND // top buttons //TODO pivot down
+        driver.leftBumper().onTrue(new ForcePivot());// FIX COMMAND // top buttons //TODO pivot down
         driver.rightBumper().onTrue(CommandFactory.AutoAimShoot());
 
         driver.leftTrigger().onTrue(new InstantCommand(() -> control.turnOnAutoAim())); // bottom buttons
@@ -99,7 +101,10 @@ public class RobotContainer {
         driver.start().onTrue(Commands.runOnce(drivetrain::resetHeading).ignoringDisable(true));
 
         driver.a().onTrue(CommandFactory.IntakeBallsON());
-        driver.y().onTrue(new ForcePivot(5)); //TODO pivot up
+        driver.y().onTrue(new ForcePivot(5));
+
+        //reset odo
+        driver.x().onTrue(Commands.runOnce(() -> quest.anchorQuest(new Pose3d(drivetrain.getState().Pose))).ignoringDisable(true));
         //driver.x().onTrue(new ForcePivot(5));
 
         // Shooter and indexer are separate so the wheel can finish ramping before balls are fed.
