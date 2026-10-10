@@ -83,8 +83,9 @@ public class RobotContainer {
 
         // final bindings -----------------------------------------------
 
-        driver.leftBumper().onTrue(CommandFactory.IntakeBallsON());// FIX COMMAND // top buttons
-        driver.rightBumper().onTrue(CommandFactory.IntakeBallsOFF());
+        //opp.povUP().onTrue(new InstantCommand(()->));
+        driver.leftBumper().onTrue(new ForcePivot(5));// FIX COMMAND // top buttons //TODO pivot down
+        driver.rightBumper().onTrue(CommandFactory.AutoAimShoot());
 
         driver.leftTrigger().onTrue(new InstantCommand(() -> control.turnOnAutoAim())); // bottom buttons
         driver.rightTrigger().onTrue(new InstantCommand(() -> control.turnOffAutoAim()));
@@ -97,19 +98,20 @@ public class RobotContainer {
         // Alliance-aware, keeps XY. Works while disabled so it can be done before the match.
         driver.start().onTrue(Commands.runOnce(drivetrain::resetHeading).ignoringDisable(true));
 
-        driver.a().onTrue(CommandFactory.AllOff());
-        driver.y().onTrue(new ForcePivot());
-        driver.x().onTrue(new ForcePivot(5));
+        driver.a().onTrue(CommandFactory.IntakeBallsON());
+        driver.y().onTrue(new ForcePivot(5)); //TODO pivot up
+        //driver.x().onTrue(new ForcePivot(5));
 
         // Shooter and indexer are separate so the wheel can finish ramping before balls are fed.
         // B: distance RPS from odometry (Quest updates that pose), slewed at 10 rps/s.
-        driver.b().onTrue(CommandFactory.RampShooter());
+        driver.b().onTrue(CommandFactory.IntakeBallsOFF());
         // POV up: indexer + conveyor. Does not change shooter speed.
         driver.povUp().onTrue(CommandFactory.Feed());
 
         driver.povLeft().onTrue(repositionAt(resetPose.TRENCH_LEFT));
         //State flipper 
         driver.povRight().onTrue(CommandFactory.ReverseFeed());
+        opp.povDown().onTrue(CommandFactory.AllOff());
 
         // Operator: place the robot on a known spot and press to re-seed position.
         // Left/right are from your own driver station. Heading is kept; Start fixes heading.
